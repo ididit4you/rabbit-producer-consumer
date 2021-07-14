@@ -1,28 +1,22 @@
-import asyncio
 import argparse
-import string
+import asyncio
 import random
-import logging
-import os
+import string
+from typing import NoReturn
 
 import aio_pika
+from aio_pika.channel import Channel
+from loguru import logger
 
-from settings import QUEUES, LOG_FORMAT
-
+from conn import connect
 from queues import declare_queue
-from rabbit import connect_to_rabbit
-
-logging.basicConfig(
-    level=logging.INFO,
-    format=LOG_FORMAT,
-    datefmt='%m/%d/%Y %I:%M:%S %p'
-)
-logger = logging.getLogger(f'PRODUCER {os.getpid()}')
+from settings import QUEUES
 
 
-async def main(input_mode: bool = False):
-    async with await connect_to_rabbit() as connection:
-        channel = await connection.channel()
+async def produce(input_mode: bool = False) -> NoReturn:
+    """Spawn tasks."""
+    async with await connect() as connection:
+        channel: Channel = await connection.channel()
         await declare_queue(channel, QUEUES['normal'])
         msg_number = 0
 
@@ -35,14 +29,15 @@ async def main(input_mode: bool = False):
                 msg = f'#{msg_number} {random.choice(string.ascii_lowercase)}'
                 await asyncio.sleep(1)
                 logger.info(msg)
-            await channel.default_exchange.publish(
-                aio_pika.Message(
-                    body=f'{msg}'.encode()
-                ),
-                routing_key=QUEUES['normal']
-            )
+            if channel.default_exchange:
+                await channel.default_exchange.publish(
+                    aio_pika.Message(
+                        body=f'{msg}'.encode(),
+                    ),
+                    routing_key=QUEUES['normal'],
+                )
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-I', '--input_mode',
@@ -51,5 +46,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     asyncio.run(
-        main(input_mode=args.input_mode)
+        produce(input_mode=args.input_mode),
     )
