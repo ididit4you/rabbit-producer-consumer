@@ -1,0 +1,40 @@
+version: '2.2'
+
+services:
+  rabbit:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit
+      RABBITMQ_DEFAULT_PASS: rabbit
+    ports:
+      - 5672:5672
+      - 15672:15672
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  producer:
+    build:
+      context: .
+    volumes:
+      - ./src:/src
+    env_file:
+      - .env
+    command: "python producer.py"
+    depends_on:
+      rabbit:
+        condition: service_healthy
+
+  consumer:
+    build:
+      context: .
+    volumes:
+      - ./src:/src
+    env_file:
+      - .env
+    command: "python consumer.py"
+    depends_on:
+      rabbit:
+        condition: service_healthy
